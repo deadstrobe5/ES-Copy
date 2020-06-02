@@ -28,13 +28,13 @@
       <v-toolbar-items class="hidden-sm-and-down" hide-details>
         <v-menu offset-y v-if="isAdmin" open-on-hover>
           <template v-slot:activator="{ on }">
-            <v-btn v-on="on" text dark>
+            <v-btn v-on="on" text dark data-cy="administrationMenuButton">
               Administration
               <v-icon>fas fa-file-alt</v-icon>
             </v-btn>
           </template>
           <v-list dense>
-            <v-list-item to="/admin/courses">
+            <v-list-item to="/admin/courses" data-cy="manageCoursesMenuButton">
               <v-list-item-action>
                 <v-icon>fas fa-school</v-icon>
               </v-list-item-action>
@@ -101,6 +101,14 @@
                 <v-list-item-title>ImpExp</v-list-item-title>
               </v-list-item-content>
             </v-list-item>
+            <v-list-item to="/management/evaluateqts">
+              <v-list-item-action>
+                <v-icon>thumbs_up_down</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title>Evaluate Questions</v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
           </v-list>
         </v-menu>
 
@@ -152,6 +160,90 @@
           <v-icon>fas fa-user</v-icon>
         </v-btn>
 
+        <v-menu offset-y v-if="isStudent && currentCourse" open-on-hover>
+          <template v-slot:activator="{ on }">
+            <v-btn v-on="on" text dark>
+              Dashboard
+              <v-icon>dashboard</v-icon>
+            </v-btn>
+          </template>
+          <v-list dense>
+            <v-list-item
+              to="/student/dashboard/questions"
+              data-cy="question-dashboard"
+            >
+              <v-list-item-action>
+                <v-icon size="22">question_answer</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title>Question</v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
+            <v-list-item to="/student/dashboard/tournaments">
+              <v-list-item-action>
+                <v-icon size="22">fas fa-trophy</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title>Tournament </v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
+          </v-list>
+
+        </v-menu>
+
+        <v-btn
+          to="/student/questions"
+          v-if="isStudent && currentCourse"
+          text
+          dark
+        >
+          My Questions
+          <v-icon>question_answer</v-icon>
+        </v-btn>
+
+        <v-menu offset-y v-if="isStudent && currentCourse" open-on-hover>
+          <template v-slot:activator="{ on }">
+            <v-btn v-on="on" text dark>
+              Tournaments
+              <v-icon>fas fa-trophy</v-icon>
+            </v-btn>
+          </template>
+          <v-list dense>
+            <v-list-item to="/student/tournament-create">
+              <v-list-item-action>
+                <v-icon size="22">create</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title>Create</v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
+            <v-list-item to="/student/tournament-enroll">
+              <v-list-item-action>
+                <v-icon size="19">fas fa-user-plus</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title>Join</v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
+            <v-list-item to="/student/tournament-open">
+              <v-list-item-action>
+                <v-icon size="22">description</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title>Show Open</v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
+            <v-list-item to="/student/tournament-cancel">
+              <v-list-item-action>
+                <v-icon size="22">description</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title>Show All</v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
+          </v-list>
+        </v-menu>
+
         <v-btn
           v-if="isLoggedIn && moreThanOneCourse"
           to="/courses"
@@ -163,7 +255,13 @@
           <v-icon>fa fa-book</v-icon>
         </v-btn>
 
-        <v-btn v-if="isLoggedIn" @click="logout" text dark>
+        <v-btn
+          v-if="isLoggedIn"
+          @click="logout"
+          data-cy="logoutButton"
+          text
+          dark
+        >
           Logout
           <v-icon>fas fa-sign-out-alt</v-icon>
         </v-btn>
@@ -261,6 +359,14 @@
               <v-list-item-title>ImpExp</v-list-item-title>
             </v-list-item-content>
           </v-list-item>
+          <v-list-item to="/management/evaluateqts">
+            <v-list-item-action>
+              <v-icon>thumbs_up_down</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title>Evaluate Questions</v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
         </v-list-group>
 
         <!-- Student Group-->
@@ -309,6 +415,41 @@
               <v-icon>fas fa-user</v-icon>
             </v-list-item-action>
             <v-list-item-content>Stats</v-list-item-content>
+          </v-list-item>
+
+          <v-list-item to="/student/dashboard/questions">
+            <v-list-item-action>
+              <v-icon>dashboard</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>Questions Dashboard</v-list-item-content>
+          </v-list-item>
+
+          <v-list-item to="/student/questions">
+            <v-list-item-action>
+              <v-icon>question_answer</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>My Questions</v-list-item-content>
+          </v-list-item>
+
+          <v-list-item to="/student/tournament-create">
+            <v-list-item-action>
+              <v-icon>create</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>Create Tournament</v-list-item-content>
+          </v-list-item>
+
+          <v-list-item to="/student/tournament-open">
+            <v-list-item-action>
+              <v-icon>description</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>Open Tournaments</v-list-item-content>
+          </v-list-item>
+
+          <v-list-item to="/student/tournament-enroll">
+            <v-list-item-action>
+              <v-icon>add_box</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>Join Tournament</v-list-item-content>
           </v-list-item>
         </v-list-group>
 

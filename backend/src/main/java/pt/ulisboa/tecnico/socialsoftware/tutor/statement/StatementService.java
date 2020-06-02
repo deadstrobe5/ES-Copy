@@ -10,6 +10,7 @@ import pt.ulisboa.tecnico.socialsoftware.tutor.answer.AnswerService;
 import pt.ulisboa.tecnico.socialsoftware.tutor.answer.domain.QuizAnswer;
 import pt.ulisboa.tecnico.socialsoftware.tutor.answer.dto.CorrectAnswerDto;
 import pt.ulisboa.tecnico.socialsoftware.tutor.answer.repository.QuizAnswerRepository;
+import pt.ulisboa.tecnico.socialsoftware.tutor.config.DateHandler;
 import pt.ulisboa.tecnico.socialsoftware.tutor.course.CourseExecution;
 import pt.ulisboa.tecnico.socialsoftware.tutor.course.CourseExecutionRepository;
 import pt.ulisboa.tecnico.socialsoftware.tutor.exceptions.TutorException;
@@ -27,8 +28,6 @@ import pt.ulisboa.tecnico.socialsoftware.tutor.statement.dto.StatementQuizDto;
 import pt.ulisboa.tecnico.socialsoftware.tutor.user.User;
 import pt.ulisboa.tecnico.socialsoftware.tutor.user.UserRepository;
 
-import javax.persistence.EntityManager;
-import javax.persistence.PersistenceContext;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -66,26 +65,26 @@ public class StatementService {
     @Autowired
     private AnswerService answerService;
 
-    @PersistenceContext
-    EntityManager entityManager;
-
     @Retryable(
       value = { SQLException.class },
       backoff = @Backoff(delay = 5000))
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public StatementQuizDto generateStudentQuiz(String username, int executionId, StatementCreationDto quizDetails) {
-        User user = userRepository.findByUsername(username);
+    public StatementQuizDto generateStudentQuiz(int userId, int executionId, StatementCreationDto quizDetails) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new TutorException(USER_NOT_FOUND, userId));
 
         Quiz quiz = new Quiz();
         quiz.setKey(quizService.getMaxQuizKey() + 1);
-        quiz.setType(Quiz.QuizType.GENERATED);
-        quiz.setCreationDate(LocalDateTime.now());
+        quiz.setType(Quiz.QuizType.GENERATED.toString());
+        quiz.setCreationDate(DateHandler.now());
 
         CourseExecution courseExecution = courseExecutionRepository.findById(executionId).orElseThrow(() -> new TutorException(COURSE_EXECUTION_NOT_FOUND, executionId));
 
         List<Question> availableQuestions = questionRepository.findAvailableQuestions(courseExecution.getCourse().getId());
 
-        availableQuestions = filterByAssessment(availableQuestions, quizDetails);
+        if(quizDetails.getAssessment() != null) {
+            availableQuestions = filterByAssessment(availableQuestions, quizDetails);
+        }
+        // TODO else use default assessment
 
         if (availableQuestions.size() < quizDetails.getNumberOfQuestions()) {
             throw new TutorException(NOT_ENOUGH_QUESTIONS);
@@ -100,8 +99,8 @@ public class StatementService {
         quiz.setCourseExecution(courseExecution);
         courseExecution.addQuiz(quiz);
 
-        entityManager.persist(quiz);
-        entityManager.persist(quizAnswer);
+        quizRepository.save(quiz);
+        quizAnswerRepository.save(quizAnswer);
 
         return new StatementQuizDto(quizAnswer);
     }
@@ -110,34 +109,39 @@ public class StatementService {
             value = { SQLException.class },
             backoff = @Backoff(delay = 5000))
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public StatementQuizDto getEvaluationQuiz(String username, int quizId) {
-        User user = userRepository.findByUsername(username);
+    public StatementQuizDto getQuizByQRCode(int userId, int quizId) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new TutorException(USER_NOT_FOUND, userId));
         Quiz quiz = quizRepository.findById(quizId).orElseThrow(() -> new TutorException(QUIZ_NOT_FOUND, quizId));
 
         if (!user.getCourseExecutions().contains(quiz.getCourseExecution())) {
-            throw new TutorException(USER_NOT_ENROLLED, username);
+            throw new TutorException(USER_NOT_ENROLLED, user.getUsername());
         }
 
-        if (quiz.getConclusionDate() != null && LocalDateTime.now().isAfter(quiz.getConclusionDate())) {
+        if (quiz.getConclusionDate() != null && DateHandler.now().isAfter(quiz.getConclusionDate())) {
             throw new TutorException(QUIZ_NO_LONGER_AVAILABLE);
         }
 
         QuizAnswer quizAnswer = quizAnswerRepository.findQuizAnswer(quiz.getId(), user.getId()).orElseGet(() -> {
             QuizAnswer qa = new QuizAnswer(user, quiz);
-            entityManager.persist(qa);
+            quizAnswerRepository.save(qa);
             return qa;
         });
 
         if (quizAnswer.isCompleted()) {
             throw new TutorException(QUIZ_ALREADY_COMPLETED);
+        }
 
-        } else if (quiz.getAvailableDate() == null || LocalDateTime.now().isAfter(quiz.getAvailableDate())) {
+        if (quizAnswer.getQuiz().isOneWay() && quizAnswer.getAnswerDate() != null) {
+            throw new TutorException(QUIZ_ALREADY_COMPLETED);
+        }
+
+        if (quiz.getAvailableDate() == null || DateHandler.now().isAfter(quiz.getAvailableDate())) {
             return new StatementQuizDto(quizAnswer);
 
         // Send timer
         } else {
             StatementQuizDto quizDto = new StatementQuizDto();
-            quizDto.setSecondsToAvailability(ChronoUnit.SECONDS.between(LocalDateTime.now(), quiz.getAvailableDate()));
+            quizDto.setTimeToAvailability(ChronoUnit.MILLIS.between(DateHandler.now(), quiz.getAvailableDate()));
             return quizDto;
         }
     }
@@ -146,10 +150,10 @@ public class StatementService {
       value = { SQLException.class },
       backoff = @Backoff(delay = 5000))
     @Transactional(isolation = Isolation.REPEATABLE_READ)
-    public List<StatementQuizDto> getAvailableQuizzes(String username, int executionId) {
-        User user = userRepository.findByUsername(username);
+    public List<StatementQuizDto> getAvailableQuizzes(int userId, int executionId) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new TutorException(USER_NOT_FOUND, userId));
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = DateHandler.now();
 
         Set<Integer> studentQuizIds =  user.getQuizAnswers().stream()
                 .filter(quizAnswer -> quizAnswer.getQuiz().getCourseExecution().getId() == executionId)
@@ -159,22 +163,23 @@ public class StatementService {
 
         // create QuizAnswer for quizzes
         quizRepository.findQuizzes(executionId).stream()
+                .filter(quiz -> !quiz.isQrCodeOnly())
+                .filter(quiz -> !quiz.getType().equals(Quiz.QuizType.GENERATED))
                 .filter(quiz -> quiz.getAvailableDate() == null || quiz.getAvailableDate().isBefore(now))
                 .filter(quiz -> !studentQuizIds.contains(quiz.getId()))
-                .filter(quiz -> !quiz.getType().equals(Quiz.QuizType.IN_CLASS))
-                .filter(quiz -> !quiz.getType().equals(Quiz.QuizType.GENERATED))
                 .forEach(quiz ->  {
                     if (quiz.getConclusionDate() == null || quiz.getConclusionDate().isAfter(now)) {
                         QuizAnswer quizAnswer = new QuizAnswer(user, quiz);
-                        entityManager.persist(quizAnswer);
+                        quizAnswerRepository.save(quizAnswer);
                     }
                 });
 
         return user.getQuizAnswers().stream()
-                .filter(quizAnswer -> quizAnswer.getQuiz().getConclusionDate() == null || LocalDateTime.now().isBefore(quizAnswer.getQuiz().getConclusionDate()))
-                .filter(quizAnswer -> quizAnswer.getQuiz().getCourseExecution().getId() == executionId)
-                .filter(quizAnswer -> quizAnswer.getQuiz().getAvailableDate() == null || !(quizAnswer.getQuiz().getType().equals(Quiz.QuizType.IN_CLASS) && quizAnswer.getQuiz().getAvailableDate().isAfter(now)))
                 .filter(quizAnswer -> !quizAnswer.isCompleted())
+                .filter(quizAnswer -> !quizAnswer.getQuiz().isOneWay() || quizAnswer.getCreationDate() == null)
+                .filter(quizAnswer -> quizAnswer.getQuiz().getCourseExecution().getId() == executionId)
+                .filter(quizAnswer -> quizAnswer.getQuiz().getConclusionDate() == null || DateHandler.now().isBefore(quizAnswer.getQuiz().getConclusionDate()))
+                .filter(quizAnswer -> quizAnswer.getQuiz().getAvailableDate().isBefore(now))
                 .map(StatementQuizDto::new)
                 .sorted(Comparator.comparing(StatementQuizDto::getAvailableDate, Comparator.nullsLast(Comparator.naturalOrder())))
                 .collect(Collectors.toList());
@@ -184,12 +189,11 @@ public class StatementService {
       value = { SQLException.class },
       backoff = @Backoff(delay = 5000))
     @Transactional(isolation = Isolation.REPEATABLE_READ)
-    public List<SolvedQuizDto> getSolvedQuizzes(String username, int executionId) {
-        User user = userRepository.findByUsername(username);
-        CourseExecution courseExecution = courseExecutionRepository.findById(executionId).orElseThrow(() -> new TutorException(COURSE_EXECUTION_NOT_FOUND, executionId));
+    public List<SolvedQuizDto> getSolvedQuizzes(int userId, int executionId) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new TutorException(USER_NOT_FOUND, userId));
 
         return user.getQuizAnswers().stream()
-                .filter(quizAnswer -> quizAnswer.canResultsBePublic(courseExecution))
+                .filter(quizAnswer -> quizAnswer.canResultsBePublic(executionId))
                 .map(SolvedQuizDto::new)
                 .sorted(Comparator.comparing(SolvedQuizDto::getAnswerDate))
                 .collect(Collectors.toList());
@@ -199,8 +203,8 @@ public class StatementService {
       value = { SQLException.class },
       backoff = @Backoff(delay = 5000))
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public List<CorrectAnswerDto> concludeQuiz(String username, Integer quizId) {
-        User user = userRepository.findByUsername(username);
+    public List<CorrectAnswerDto> concludeQuiz(int userId, Integer quizId) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new TutorException(USER_NOT_FOUND, userId));
 
         return answerService.concludeQuiz(user, quizId);
     }
@@ -209,8 +213,8 @@ public class StatementService {
             value = { SQLException.class },
             backoff = @Backoff(delay = 5000))
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public void submitAnswer(String username, Integer quizId, StatementAnswerDto answer) {
-        User user = userRepository.findByUsername(username);
+    public void submitAnswer(int userId, Integer quizId, StatementAnswerDto answer) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new TutorException(USER_NOT_FOUND, userId));
 
         answerService.submitAnswer(user, quizId, answer);
     }
@@ -220,7 +224,7 @@ public class StatementService {
             backoff = @Backoff(delay = 5000))
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void completeOpenQuizAnswers() {
-        Set<QuizAnswer> quizAnswersToClose = quizAnswerRepository.findQuizAnswersToClose(LocalDateTime.now());
+        Set<QuizAnswer> quizAnswersToClose = quizAnswerRepository.findQuizAnswersToClose(DateHandler.now());
 
         quizAnswersToClose.forEach(quizAnswer -> {
             if (!quizAnswer.isCompleted()) {
@@ -232,9 +236,36 @@ public class StatementService {
         });
     }
 
+    @Retryable(
+            value = { SQLException.class },
+            backoff = @Backoff(delay = 5000))
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void startQuiz(int userId, int quizId) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new TutorException(USER_NOT_FOUND, userId));
+        Quiz quiz = quizRepository.findById(quizId).orElseThrow(() -> new TutorException(QUIZ_NOT_FOUND, quizId));
+
+        if (!user.getCourseExecutions().contains(quiz.getCourseExecution())) {
+            throw new TutorException(USER_NOT_ENROLLED, user.getUsername());
+        }
+
+        if (quiz.getConclusionDate() != null && DateHandler.now().isAfter(quiz.getConclusionDate())) {
+            throw new TutorException(QUIZ_NO_LONGER_AVAILABLE);
+        }
+
+        QuizAnswer quizAnswer = quizAnswerRepository.findQuizAnswer(quizId, user.getId()).orElseThrow(() -> new TutorException(QUIZ_ANSWER_NOT_FOUND, quizId));
+
+        if (quizAnswer.isCompleted()) {
+            throw new TutorException(QUIZ_ALREADY_COMPLETED);
+        } else if (quizAnswer.getCreationDate() == null) {
+            quizAnswer.setCreationDate(DateHandler.now());
+        } else if (quiz.isOneWay()) {
+            throw new TutorException(QUIZ_ALREADY_STARTED);
+        }
+    }
+
     public List<Question> filterByAssessment(List<Question> availableQuestions, StatementCreationDto quizDetails) {
-        Assessment assessment = assessmentRepository.findById(Integer.valueOf(quizDetails.getAssessment()))
-                .orElseThrow(() -> new TutorException(ASSESSMENT_NOT_FOUND, Integer.parseInt(quizDetails.getAssessment())));
+        Assessment assessment = assessmentRepository.findById(quizDetails.getAssessment())
+                .orElseThrow(() -> new TutorException(ASSESSMENT_NOT_FOUND, quizDetails.getAssessment()));
 
         return availableQuestions.stream().filter(question -> question.belongsToAssessment(assessment)).collect(Collectors.toList());
     }

@@ -2,6 +2,8 @@ package pt.ulisboa.tecnico.socialsoftware.tutor.quiz.domain;
 
 import pt.ulisboa.tecnico.socialsoftware.tutor.answer.domain.QuestionAnswer;
 import pt.ulisboa.tecnico.socialsoftware.tutor.exceptions.TutorException;
+import pt.ulisboa.tecnico.socialsoftware.tutor.impexp.domain.DomainEntity;
+import pt.ulisboa.tecnico.socialsoftware.tutor.impexp.domain.Visitor;
 import pt.ulisboa.tecnico.socialsoftware.tutor.question.domain.Question;
 
 import javax.persistence.*;
@@ -12,7 +14,7 @@ import static pt.ulisboa.tecnico.socialsoftware.tutor.exceptions.ErrorMessage.QU
 
 @Entity
 @Table(name="quiz_questions")
-public class QuizQuestion {
+public class QuizQuestion implements DomainEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
@@ -31,15 +33,17 @@ public class QuizQuestion {
     private Integer sequence;
 
     public QuizQuestion() {
-
     }
 
     public QuizQuestion(Quiz quiz, Question question, Integer sequence) {
-        this.quiz = quiz;
-        this.quiz.addQuizQuestion(this);
-        this.question = question;
-        question.addQuizQuestion(this);
-        this.sequence = sequence;
+        setQuiz(quiz);
+        setQuestion(question);
+        setSequence(sequence);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+        visitor.visitQuizQuestion(this);
     }
 
     public Quiz getQuiz() {
@@ -48,6 +52,7 @@ public class QuizQuestion {
 
     public void setQuiz(Quiz quiz) {
         this.quiz = quiz;
+        quiz.addQuizQuestion(this);
     }
 
     public Question getQuestion() {
@@ -56,6 +61,7 @@ public class QuizQuestion {
 
     public void setQuestion(Question question) {
         this.question = question;
+        question.addQuizQuestion(this);
     }
 
     public Integer getSequence() {
@@ -64,10 +70,6 @@ public class QuizQuestion {
 
     public Integer getId() {
         return id;
-    }
-
-    public void setId(Integer id) {
-        this.id = id;
     }
 
     public Set<QuestionAnswer> getQuestionAnswers() {
@@ -86,13 +88,15 @@ public class QuizQuestion {
     public String toString() {
         return "QuizQuestion{" +
                 "id=" + id +
+                ", question=" + question +
+                ", sequence=" + sequence +
                 '}';
     }
 
     public void remove() {
-        quiz.getQuizQuestions().remove(this);
+        this.quiz.getQuizQuestions().remove(this);
         quiz = null;
-        question.getQuizQuestions().remove(this);
+        this.question.getQuizQuestions().remove(this);
         question = null;
     }
 
@@ -101,5 +105,4 @@ public class QuizQuestion {
             throw new TutorException(QUIZ_QUESTION_HAS_ANSWERS);
         }
     }
-
 }

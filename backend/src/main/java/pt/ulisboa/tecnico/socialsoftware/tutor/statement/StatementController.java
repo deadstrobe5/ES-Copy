@@ -28,11 +28,11 @@ public class StatementController {
     public List<StatementQuizDto> getAvailableQuizzes(Principal principal, @PathVariable int executionId) {
         User user = (User) ((Authentication) principal).getPrincipal();
 
-        if(user == null){
+        if (user == null) {
             throw new TutorException(AUTHENTICATION_ERROR);
         }
 
-        return statementService.getAvailableQuizzes(user.getUsername(), executionId);
+        return statementService.getAvailableQuizzes(user.getId(), executionId);
     }
 
     @PostMapping("/executions/{executionId}/quizzes/generate")
@@ -40,11 +40,11 @@ public class StatementController {
     public StatementQuizDto getNewQuiz(Principal principal, @PathVariable int executionId, @RequestBody StatementCreationDto quizDetails) {
         User user = (User) ((Authentication) principal).getPrincipal();
 
-        if(user == null){
+        if (user == null) {
             throw new TutorException(AUTHENTICATION_ERROR);
         }
 
-        return statementService.generateStudentQuiz(user.getUsername(), executionId, quizDetails);
+        return statementService.generateStudentQuiz(user.getId(), executionId, quizDetails);
     }
 
     @GetMapping("/executions/{executionId}/quizzes/solved")
@@ -52,23 +52,23 @@ public class StatementController {
     public List<SolvedQuizDto> getSolvedQuizzes(Principal principal, @PathVariable int executionId) {
         User user = (User) ((Authentication) principal).getPrincipal();
 
-        if(user == null){
+        if (user == null) {
             throw new TutorException(AUTHENTICATION_ERROR);
         }
 
-        return statementService.getSolvedQuizzes(user.getUsername(), executionId);
+        return statementService.getSolvedQuizzes(user.getId(), executionId);
     }
 
-    @GetMapping("/quizzes/{quizId}/evaluation")
+    @GetMapping("/quizzes/{quizId}/byqrcode")
     @PreAuthorize("hasRole('ROLE_STUDENT') and hasPermission(#quizId, 'QUIZ.ACCESS')")
-    public StatementQuizDto getEvaluationQuiz(Principal principal, @PathVariable int quizId) {
+    public StatementQuizDto getQuizByQRCode(Principal principal, @PathVariable int quizId) {
         User user = (User) ((Authentication) principal).getPrincipal();
 
-        if(user == null){
+        if (user == null) {
             throw new TutorException(AUTHENTICATION_ERROR);
         }
 
-        return statementService.getEvaluationQuiz(user.getUsername(), quizId);
+        return statementService.getQuizByQRCode(user.getId(), quizId);
     }
 
     @PostMapping("/quizzes/{quizId}/submit")
@@ -76,11 +76,23 @@ public class StatementController {
     public void submitAnswer(Principal principal, @PathVariable int quizId, @Valid @RequestBody StatementAnswerDto answer) {
         User user = (User) ((Authentication) principal).getPrincipal();
 
-        if(user == null){
+        if (user == null) {
             throw new TutorException(AUTHENTICATION_ERROR);
         }
 
-        statementService.submitAnswer(user.getUsername(), quizId, answer);
+        statementService.submitAnswer(user.getId(), quizId, answer);
+    }
+
+    @GetMapping("/quizzes/{quizId}/start")
+    @PreAuthorize("hasRole('ROLE_STUDENT') and hasPermission(#quizId, 'QUIZ.ACCESS')")
+    public void startQuiz(Principal principal, @PathVariable int quizId) {
+        User user = (User) ((Authentication) principal).getPrincipal();
+
+        if (user == null) {
+            throw new TutorException(AUTHENTICATION_ERROR);
+        }
+
+        statementService.startQuiz(user.getId(), quizId);
     }
 
     @GetMapping("/quizzes/{quizId}/conclude")
@@ -89,10 +101,10 @@ public class StatementController {
 
         User user = (User) ((Authentication) principal).getPrincipal();
 
-        if(user == null){
+        if (user == null) {
             throw new TutorException(AUTHENTICATION_ERROR);
         }
 
-        return statementService.concludeQuiz(user.getUsername(), quizId);
+        return statementService.concludeQuiz(user.getId(), quizId);
     }
 }

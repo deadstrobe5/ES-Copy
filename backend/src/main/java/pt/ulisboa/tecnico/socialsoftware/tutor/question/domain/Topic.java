@@ -1,15 +1,20 @@
 package pt.ulisboa.tecnico.socialsoftware.tutor.question.domain;
 
 import pt.ulisboa.tecnico.socialsoftware.tutor.course.Course;
+import pt.ulisboa.tecnico.socialsoftware.tutor.exceptions.TutorException;
+import pt.ulisboa.tecnico.socialsoftware.tutor.impexp.domain.DomainEntity;
+import pt.ulisboa.tecnico.socialsoftware.tutor.impexp.domain.Visitor;
 import pt.ulisboa.tecnico.socialsoftware.tutor.question.dto.TopicDto;
+import pt.ulisboa.tecnico.socialsoftware.tutor.tournament.domain.Tournament;
 
 import javax.persistence.*;
 import java.util.*;
 
+import static pt.ulisboa.tecnico.socialsoftware.tutor.exceptions.ErrorMessage.INVALID_NAME_FOR_TOPIC;
+
 @Entity
 @Table(name = "topics")
-public class Topic {
-    @SuppressWarnings("unused")
+public class Topic implements DomainEntity {
     public enum Status {
         DISABLED, REMOVED, AVAILABLE
     }
@@ -18,39 +23,46 @@ public class Topic {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
+    @Column(nullable = false)
     private String name;
 
     @ManyToMany
-    private Set<Question> questions = new HashSet<>();
-
-    @ManyToOne
-    private Topic parentTopic;
-
-    @OneToMany(cascade = CascadeType.ALL, mappedBy = "parentTopic", fetch=FetchType.EAGER)
-    private Set<Topic> childrenTopics = new HashSet<>();
+    private final Set<Question> questions = new HashSet<>();
 
     @ManyToMany(cascade = CascadeType.ALL, fetch=FetchType.EAGER)
-    private List<TopicConjunction> topicConjunctions = new ArrayList<>();
+    private final List<TopicConjunction> topicConjunctions = new ArrayList<>();
 
     @ManyToOne
     @JoinColumn(name = "course_id")
     private Course course;
 
+    @ManyToMany(mappedBy = "topicList")
+    private Set<Tournament> tournaments = new HashSet<>();
+
     public Topic() {
     }
 
     public Topic(Course course, TopicDto topicDto) {
-        this.name = topicDto.getName();
-        this.course = course;
-        course.addTopic(this);
+        setName(topicDto.getName());
+        setCourse(course);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+        visitor.visitTopic(this);
+
+    }
+
+    public Set<Tournament> getTournaments() {
+        return tournaments;
+    }
+
+    public void setTournaments(Set<Tournament> tournaments) {
+        this.tournaments = tournaments;
     }
 
     public Integer getId() {
         return id;
-    }
-
-    public void setId(Integer id) {
-        this.id = id;
     }
 
     public String getName() {
@@ -58,6 +70,9 @@ public class Topic {
     }
 
     public void setName(String name) {
+        if (name == null || name.isBlank())
+            throw new TutorException(INVALID_NAME_FOR_TOPIC);
+
         this.name = name;
     }
 
@@ -65,20 +80,16 @@ public class Topic {
         return questions;
     }
 
-    public Topic getParentTopic() {
-        return parentTopic;
-    }
-
-    public void setParentTopic(Topic parentTopic) {
-        this.parentTopic = parentTopic;
-    }
-
-    public Set<Topic> getChildrenTopics() {
-        return childrenTopics;
+    public void addQuestion(Question question) {
+        this.questions.add(question);
     }
 
     public List<TopicConjunction> getTopicConjunctions() {
         return topicConjunctions;
+    }
+
+    public void addTopicConjunction(TopicConjunction topicConjunction) {
+        this.topicConjunctions.add(topicConjunction);
     }
 
     public Course getCourse() {
@@ -87,14 +98,7 @@ public class Topic {
 
     public void setCourse(Course course) {
         this.course = course;
-    }
-
-    public void addTopicConjunction(TopicConjunction topicConjunction) {
-        this.topicConjunctions.add(topicConjunction);
-    }
-
-    public void addQuestion(Question question) {
-        this.questions.add(question);
+        course.addTopic(this);
     }
 
     @Override
@@ -115,7 +119,6 @@ public class Topic {
         return "Topic{" +
                 "id=" + id +
                 ", name='" + name + '\'' +
-                ", parentTopic=" + parentTopic +
                 '}';
     }
 
@@ -126,15 +129,8 @@ public class Topic {
         getQuestions().forEach(question -> question.getTopics().remove(this));
         getQuestions().clear();
 
-        if (this.parentTopic != null) {
-            parentTopic.getChildrenTopics().remove(this);
-            parentTopic.getChildrenTopics().addAll(this.getChildrenTopics());
-        }
-
-        this.childrenTopics.forEach(topic -> topic.parentTopic = this.parentTopic);
         this.topicConjunctions.forEach(topicConjunction -> topicConjunction.getTopics().remove(this));
 
-        this.parentTopic = null;
-        this.childrenTopics.clear();
     }
+
 }

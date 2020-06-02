@@ -4,10 +4,10 @@ import org.jdom2.Document;
 import org.jdom2.Element;
 import org.jdom2.output.Format;
 import org.jdom2.output.XMLOutputter;
+import pt.ulisboa.tecnico.socialsoftware.tutor.config.DateHandler;
 import pt.ulisboa.tecnico.socialsoftware.tutor.quiz.domain.Quiz;
 import pt.ulisboa.tecnico.socialsoftware.tutor.quiz.domain.QuizQuestion;
 
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Set;
 
@@ -38,23 +38,25 @@ public class QuizzesXmlExport {
 	}
 
 	private void exportQuiz(Element element, Quiz quiz) {
-		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-
 		Element quizElement = new Element("quiz");
+		quizElement.setAttribute("courseName",quiz.getCourseExecution().getCourse().getName());
+		quizElement.setAttribute("courseType",quiz.getCourseExecution().getCourse().getType().name());
 		quizElement.setAttribute("courseExecutionType",quiz.getCourseExecution().getType().name());
 		quizElement.setAttribute("acronym",quiz.getCourseExecution().getAcronym());
         quizElement.setAttribute("academicTerm",quiz.getCourseExecution().getAcademicTerm());
         quizElement.setAttribute("key", String.valueOf(quiz.getKey()));
 		quizElement.setAttribute("scramble", String.valueOf(quiz.getScramble()));
+		quizElement.setAttribute("qrCodeOnly", String.valueOf(quiz.isQrCodeOnly()));
+		quizElement.setAttribute("oneWay", String.valueOf(quiz.isOneWay()));
 		quizElement.setAttribute("type", quiz.getType().name());
 		quizElement.setAttribute("title", quiz.getTitle());
 
 		if (quiz.getCreationDate() != null)
-			quizElement.setAttribute("creationDate", quiz.getCreationDate().format(formatter));
+			quizElement.setAttribute("creationDate", DateHandler.toISOString(quiz.getCreationDate()));
 		if (quiz.getAvailableDate() != null)
-			quizElement.setAttribute("availableDate", quiz.getAvailableDate().format(formatter));
+			quizElement.setAttribute("availableDate", DateHandler.toISOString(quiz.getAvailableDate()));
         if (quiz.getConclusionDate() != null)
-            quizElement.setAttribute("conclusionDate", quiz.getConclusionDate().format(formatter));
+            quizElement.setAttribute("conclusionDate", DateHandler.toISOString(quiz.getConclusionDate()));
 		if (quiz.getSeries() != null)
 			quizElement.setAttribute("series", String.valueOf(quiz.getSeries()));
 		if (quiz.getVersion() != null)
@@ -83,5 +85,4 @@ public class QuizzesXmlExport {
 
 		optionsElement.addContent(optionElement);
 	}
-
 }

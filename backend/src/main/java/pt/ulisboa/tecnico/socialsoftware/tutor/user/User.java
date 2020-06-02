@@ -3,11 +3,14 @@ package pt.ulisboa.tecnico.socialsoftware.tutor.user;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
-
 import pt.ulisboa.tecnico.socialsoftware.tutor.answer.domain.QuizAnswer;
+import pt.ulisboa.tecnico.socialsoftware.tutor.config.DateHandler;
 import pt.ulisboa.tecnico.socialsoftware.tutor.course.CourseExecution;
+import pt.ulisboa.tecnico.socialsoftware.tutor.impexp.domain.DomainEntity;
+import pt.ulisboa.tecnico.socialsoftware.tutor.impexp.domain.Visitor;
 import pt.ulisboa.tecnico.socialsoftware.tutor.question.domain.Question;
 import pt.ulisboa.tecnico.socialsoftware.tutor.quiz.domain.Quiz;
+import pt.ulisboa.tecnico.socialsoftware.tutor.tournament.domain.Tournament;
 
 import javax.persistence.*;
 import java.time.LocalDateTime;
@@ -16,7 +19,7 @@ import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "users")
-public class User implements UserDetails {
+public class User implements UserDetails, DomainEntity {
     public enum Role {STUDENT, TEACHER, ADMIN, DEMO_ADMIN}
 
     @Id
@@ -45,6 +48,11 @@ public class User implements UserDetails {
     private Integer numberOfCorrectInClassAnswers;
     private Integer numberOfCorrectStudentAnswers;
 
+
+    private Boolean publicSQDashboard;
+    private Boolean publicTournamentDashboard;
+
+
     @Column(name = "creation_date")
     private LocalDateTime creationDate;
 
@@ -57,6 +65,12 @@ public class User implements UserDetails {
     @ManyToMany
     private Set<CourseExecution> courseExecutions = new HashSet<>();
 
+    @ManyToMany(mappedBy = "studentList")
+    private Set<Tournament> tournamentsEnrolled = new HashSet<>();
+
+    @ManyToMany(mappedBy = "answeredList")
+    private Set<Tournament> tournamentsAnswered = new HashSet<>();
+
     public User() {
     }
 
@@ -65,7 +79,7 @@ public class User implements UserDetails {
         setUsername(username);
         this.key = key;
         this.role = role;
-        this.creationDate = LocalDateTime.now();
+        this.creationDate = DateHandler.now();
         this.numberOfTeacherQuizzes = 0;
         this.numberOfInClassQuizzes = 0;
         this.numberOfStudentQuizzes = 0;
@@ -75,14 +89,44 @@ public class User implements UserDetails {
         this.numberOfCorrectTeacherAnswers = 0;
         this.numberOfCorrectInClassAnswers = 0;
         this.numberOfCorrectStudentAnswers = 0;
+        this.publicSQDashboard = true;
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+        visitor.visitUser(this);
+    }
+
+    public Boolean getPublicSQDashboard() {
+        if (this.publicSQDashboard == null)
+            this.publicSQDashboard = true;
+        return this.publicSQDashboard;
+    }
+
+    public void setPublicSQDashboard(Boolean bool) {
+        this.publicSQDashboard = bool;
+    }
+
+    public Boolean getPublicTournamentDashboard() {
+        if (this.publicTournamentDashboard == null)
+            this.publicTournamentDashboard = true;
+        return this.publicTournamentDashboard;
+    }
+
+    public void setPublicTournamentDashboard(Boolean bool) {
+        this.publicTournamentDashboard = bool;
+    }
+
+    public Set<Tournament> getTournamentsEnrolled() {
+        return tournamentsEnrolled;
+    }
+
+    public void setTournamentsEnrolled(Set<Tournament> tournamentsEnrolled) {
+        this.tournamentsEnrolled = tournamentsEnrolled;
     }
 
     public Integer getId() {
         return id;
-    }
-
-    public void setId(Integer id) {
-        this.id = id;
     }
 
     public Integer getKey() {
@@ -117,6 +161,15 @@ public class User implements UserDetails {
     public void setEnrolledCoursesAcronyms(String enrolledCoursesAcronyms) {
         this.enrolledCoursesAcronyms = enrolledCoursesAcronyms;
     }
+
+    public Set<Tournament> getTournamentsAnswered() {
+        return tournamentsAnswered;
+    }
+
+    public void setTournamentsAnswered(Set<Tournament> tournamentsAnswered) {
+        this.tournamentsAnswered = tournamentsAnswered;
+    }
+
 
     public Role getRole() {
         return role;
@@ -169,7 +222,7 @@ public class User implements UserDetails {
     }
 
     public Integer getNumberOfStudentQuizzes() {
-        if(this.numberOfStudentQuizzes == null)
+        if (this.numberOfStudentQuizzes == null)
             this.numberOfStudentQuizzes = (int) getQuizAnswers().stream()
                     .filter(QuizAnswer::isCompleted)
                     .filter(quizAnswer -> quizAnswer.getQuiz().getType().equals(Quiz.QuizType.GENERATED))
@@ -292,6 +345,29 @@ public class User implements UserDetails {
         this.numberOfCorrectStudentAnswers = numberOfCorrectStudentAnswers;
     }
 
+    @Override
+    public String toString() {
+        return "User{" +
+                "id=" + id +
+                ", key=" + key +
+                ", role=" + role +
+                ", username='" + username + '\'' +
+                ", name='" + name + '\'' +
+                ", enrolledCoursesAcronyms='" + enrolledCoursesAcronyms + '\'' +
+                ", numberOfTeacherQuizzes=" + numberOfTeacherQuizzes +
+                ", numberOfStudentQuizzes=" + numberOfStudentQuizzes +
+                ", numberOfInClassQuizzes=" + numberOfInClassQuizzes +
+                ", numberOfTeacherAnswers=" + numberOfTeacherAnswers +
+                ", numberOfInClassAnswers=" + numberOfInClassAnswers +
+                ", numberOfStudentAnswers=" + numberOfStudentAnswers +
+                ", numberOfCorrectTeacherAnswers=" + numberOfCorrectTeacherAnswers +
+                ", numberOfCorrectInClassAnswers=" + numberOfCorrectInClassAnswers +
+                ", numberOfCorrectStudentAnswers=" + numberOfCorrectStudentAnswers +
+                ", creationDate=" + creationDate +
+                ", lastAccess=" + lastAccess +
+                '}';
+    }
+
     public void increaseNumberOfQuizzes(Quiz.QuizType type) {
         switch (type) {
             case PROPOSED:
@@ -346,29 +422,6 @@ public class User implements UserDetails {
 
     public void addCourse(CourseExecution course) {
         this.courseExecutions.add(course);
-    }
-
-    @Override
-    public String toString() {
-        return "User{" +
-                "id=" + id +
-                ", role=" + role +
-                ", id=" + id +
-                ", username='" + username + '\'' +
-                ", name='" + name + '\'' +
-                ", courseAcronyms='" + enrolledCoursesAcronyms + '\'' +
-                ", numberOfTeacherQuizzes=" + numberOfTeacherQuizzes +
-                ", numberOfInClassQuizzes=" + numberOfInClassQuizzes +
-                ", numberOfStudentQuizzes=" + numberOfStudentQuizzes +
-                ", numberOfTeacherAnswers=" + numberOfTeacherAnswers +
-                ", numberOfCorrectTeacherAnswers=" + numberOfCorrectTeacherAnswers +
-                ", numberOfInClassAnswers=" + numberOfInClassAnswers +
-                ", numberOfCorrectInClassAnswers=" + numberOfCorrectInClassAnswers +
-                ", numberOfStudentAnswers=" + numberOfStudentAnswers +
-                ", numberOfCorrectStudentAnswers=" + numberOfCorrectStudentAnswers +
-                ", creationDate=" + creationDate +
-                ", courseExecutions=" + courseExecutions +
-                '}';
     }
 
     @Override
@@ -437,7 +490,7 @@ public class User implements UserDetails {
         Random rand = new Random(System.currentTimeMillis());
         while (numberOfAddedQuestions < numberOfQuestions) {
             int next = rand.nextInt(studentAnsweredQuestions.size());
-            if(!result.contains(studentAnsweredQuestions.get(next))) {
+            if (!result.contains(studentAnsweredQuestions.get(next))) {
                 result.add(studentAnsweredQuestions.get(next));
                 numberOfAddedQuestions++;
             }

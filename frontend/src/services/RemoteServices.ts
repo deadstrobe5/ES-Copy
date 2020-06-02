@@ -12,8 +12,10 @@ import { Student } from '@/models/management/Student';
 import Assessment from '@/models/management/Assessment';
 import AuthDto from '@/models/user/AuthDto';
 import StatementAnswer from '@/models/statement/StatementAnswer';
-import { QuizAnswer } from '@/models/management/QuizAnswer';
 import { QuizAnswers } from '@/models/management/QuizAnswers';
+import Tournament from '@/models/management/Tournament';
+import StudentQuestion from '@/models/management/StudentQuestion';
+import SQDashboard from '@/models/statement/SQDashboard';
 
 const httpClient = axios.create();
 httpClient.defaults.timeout = 10000;
@@ -105,6 +107,24 @@ export default class RemoteServices {
       });
   }
 
+  static async exportCourseQuestions(): Promise<Blob> {
+    return httpClient
+      .get(
+        `/courses/${Store.getters.getCurrentCourse.courseId}/questions/export`,
+        {
+          responseType: 'blob'
+        }
+      )
+      .then(response => {
+        return new Blob([response.data], {
+          type: 'application/zip, application/octet-stream'
+        });
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
   static async getAvailableQuestions(): Promise<Question[]> {
     return httpClient
       .get(
@@ -120,7 +140,7 @@ export default class RemoteServices {
       });
   }
 
-  static createQuestion(question: Question): Promise<Question> {
+  static async createQuestion(question: Question): Promise<Question> {
     return httpClient
       .post(
         `/courses/${Store.getters.getCurrentCourse.courseId}/questions/`,
@@ -134,7 +154,7 @@ export default class RemoteServices {
       });
   }
 
-  static updateQuestion(question: Question): Promise<Question> {
+  static async updateQuestion(question: Question): Promise<Question> {
     return httpClient
       .put(`/questions/${question.id}`, question)
       .then(response => {
@@ -145,13 +165,13 @@ export default class RemoteServices {
       });
   }
 
-  static deleteQuestion(questionId: number) {
+  static async deleteQuestion(questionId: number) {
     return httpClient.delete(`/questions/${questionId}`).catch(async error => {
       throw Error(await this.errorMessage(error));
     });
   }
 
-  static setQuestionStatus(
+  static async setQuestionStatus(
     questionId: number,
     status: String
   ): Promise<Question> {
@@ -165,7 +185,7 @@ export default class RemoteServices {
       });
   }
 
-  static uploadImage(file: File, questionId: number): Promise<string> {
+  static async uploadImage(file: File, questionId: number): Promise<string> {
     let formData = new FormData();
     formData.append('file', file);
     return httpClient
@@ -182,11 +202,11 @@ export default class RemoteServices {
       });
   }
 
-  static updateQuestionTopics(questionId: number, topics: Topic[]) {
+  static async updateQuestionTopics(questionId: number, topics: Topic[]) {
     return httpClient.put(`/questions/${questionId}/topics`, topics);
   }
 
-  static getTopics(): Promise<Topic[]> {
+  static async getTopics(): Promise<Topic[]> {
     return httpClient
       .get(`/courses/${Store.getters.getCurrentCourse.courseId}/topics`)
       .then(response => {
@@ -199,7 +219,7 @@ export default class RemoteServices {
       });
   }
 
-  static getAvailableQuizzes(): Promise<StatementQuiz[]> {
+  static async getAvailableQuizzes(): Promise<StatementQuiz[]> {
     return httpClient
       .get(
         `/executions/${Store.getters.getCurrentCourse.courseExecutionId}/quizzes/available`
@@ -214,7 +234,7 @@ export default class RemoteServices {
       });
   }
 
-  static generateStatementQuiz(params: object): Promise<StatementQuiz> {
+  static async generateStatementQuiz(params: object): Promise<StatementQuiz> {
     return httpClient
       .post(
         `/executions/${Store.getters.getCurrentCourse.courseExecutionId}/quizzes/generate`,
@@ -228,7 +248,7 @@ export default class RemoteServices {
       });
   }
 
-  static getSolvedQuizzes(): Promise<SolvedQuiz[]> {
+  static async getSolvedQuizzes(): Promise<SolvedQuiz[]> {
     return httpClient
       .get(
         `/executions/${Store.getters.getCurrentCourse.courseExecutionId}/quizzes/solved`
@@ -243,9 +263,9 @@ export default class RemoteServices {
       });
   }
 
-  static async getEvaluationQuiz(quizId: number): Promise<StatementQuiz> {
+  static async getQuizByQRCode(quizId: number): Promise<StatementQuiz> {
     return httpClient
-      .get(`/quizzes/${quizId}/evaluation`)
+      .get(`/quizzes/${quizId}/byqrcode`)
       .then(response => {
         return new StatementQuiz(response.data);
       })
@@ -254,7 +274,28 @@ export default class RemoteServices {
       });
   }
 
-  static submitAnswer(quizId: number, answer: StatementAnswer) {
+  static async exportQuiz(quizId: number): Promise<Blob> {
+    return httpClient
+      .get(`/quizzes/${quizId}/export`, {
+        responseType: 'blob'
+      })
+      .then(response => {
+        return new Blob([response.data], {
+          type: 'application/zip, application/octet-stream'
+        });
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static async startQuiz(quizId: number) {
+    return httpClient.get(`/quizzes/${quizId}/start`).catch(async error => {
+      throw Error(await this.errorMessage(error));
+    });
+  }
+
+  static async submitAnswer(quizId: number, answer: StatementAnswer) {
     return httpClient
       .post(`/quizzes/${quizId}/submit`, answer)
       .catch(async error => {
@@ -262,7 +303,7 @@ export default class RemoteServices {
       });
   }
 
-  static concludeQuiz(
+  static async concludeQuiz(
     quizId: number
   ): Promise<StatementCorrectAnswer[] | void> {
     return httpClient
@@ -279,7 +320,7 @@ export default class RemoteServices {
       });
   }
 
-  static createTopic(topic: Topic): Promise<Topic> {
+  static async createTopic(topic: Topic): Promise<Topic> {
     return httpClient
       .post(
         `/courses/${Store.getters.getCurrentCourse.courseId}/topics/`,
@@ -293,7 +334,7 @@ export default class RemoteServices {
       });
   }
 
-  static updateTopic(topic: Topic): Promise<Topic> {
+  static async updateTopic(topic: Topic): Promise<Topic> {
     return httpClient
       .put(`/topics/${topic.id}`, topic)
       .then(response => {
@@ -304,13 +345,13 @@ export default class RemoteServices {
       });
   }
 
-  static deleteTopic(topic: Topic) {
+  static async deleteTopic(topic: Topic) {
     return httpClient.delete(`/topics/${topic.id}`).catch(async error => {
       throw Error(await this.errorMessage(error));
     });
   }
 
-  static getNonGeneratedQuizzes(): Promise<Quiz[]> {
+  static async getNonGeneratedQuizzes(): Promise<Quiz[]> {
     return httpClient
       .get(
         `/executions/${Store.getters.getCurrentCourse.courseExecutionId}/quizzes/non-generated`
@@ -391,7 +432,7 @@ export default class RemoteServices {
       });
   }
 
-  static getAssessments(): Promise<Assessment[]> {
+  static async getAssessments(): Promise<Assessment[]> {
     return httpClient
       .get(
         `/executions/${Store.getters.getCurrentCourse.courseExecutionId}/assessments`
@@ -472,20 +513,9 @@ export default class RemoteServices {
       });
   }
 
-  static async activateCourse(course: Course): Promise<Course> {
-    return httpClient
-      .post('/courses', course)
-      .then(response => {
-        return new Course(response.data);
-      })
-      .catch(async error => {
-        throw Error(await this.errorMessage(error));
-      });
-  }
-
   static getCourses(): Promise<Course[]> {
     return httpClient
-      .get('/admin/courses/executions')
+      .get('/courses/executions')
       .then(response => {
         return response.data.map((course: any) => {
           return new Course(course);
@@ -496,9 +526,20 @@ export default class RemoteServices {
       });
   }
 
-  static async createCourse(course: Course): Promise<Course> {
+  static async activateCourse(course: Course): Promise<Course> {
     return httpClient
-      .post('/admin/courses/executions', course)
+      .post('/courses/activate', course)
+      .then(response => {
+        return new Course(response.data);
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static async createExternalCourse(course: Course): Promise<Course> {
+    return httpClient
+      .post('/courses/external', course)
       .then(response => {
         return new Course(response.data);
       })
@@ -509,7 +550,7 @@ export default class RemoteServices {
 
   static async deleteCourse(courseExecutionId: number | undefined) {
     return httpClient
-      .delete('/admin/courses/executions/' + courseExecutionId)
+      .delete(`/executions/${courseExecutionId}`)
       .catch(async error => {
         throw Error(await this.errorMessage(error));
       });
@@ -551,5 +592,265 @@ export default class RemoteServices {
       console.log(error);
       return 'Unknown Error - Contact admin';
     }
+  }
+
+  // ***********************************************
+  // Tournaments
+  // ***********************************************
+
+  static createTournament(tournament: Tournament): Promise<Tournament> {
+    return httpClient
+      .post(
+        `/executions/${Store.getters.getCurrentCourse.courseExecutionId}/tournaments`,
+        tournament
+      )
+      .then(response => {
+        return new Tournament(response.data);
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static getAvailableTournaments(): Promise<Tournament[]> {
+    return httpClient
+      .get(
+        `/executions/${Store.getters.getCurrentCourse.courseExecutionId}/tournaments/available`
+      )
+      .then(response => {
+        return response.data.map((tournament: any) => {
+          return new Tournament(tournament);
+        });
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static getDashBoardTournaments(): Promise<Tournament[]> {
+    return httpClient
+      .get(
+        `/executions/${Store.getters.getCurrentCourse.courseExecutionId}/tournaments/dashboard`
+      )
+      .then(response => {
+        return response.data.map((tournament: any) => {
+          return new Tournament(tournament);
+        });
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static getTournamentPrivacy(): Promise<boolean> {
+    return httpClient
+      .get(
+        `/tournaments/privacy`
+      )
+      .then(response => {
+        return response.data;
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static enrollInTournament(tournament: Tournament): Promise<Tournament> {
+    return httpClient
+      .put(`/tournaments/${tournament.id}/enroll`)
+      .then(response => {
+        return new Tournament(response.data);
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static async changeTournamentPrivacy(privacy: boolean) {
+    return httpClient
+      .put(`/tournaments/privacy/${privacy}`)
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static async deleteTournament(tournamentId: number) {
+    return httpClient
+      .delete(`/tournaments/${tournamentId}/cancel`)
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static getOpenTournaments(): Promise<Tournament[]> {
+    return httpClient
+      .get(
+        `/executions/${Store.getters.getCurrentCourse.courseExecutionId}/tournaments/show-open`
+      )
+      .then(response => {
+        return response.data.map((tournament: any) => {
+          return new Tournament(tournament);
+        });
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static startTournament(tournament: Tournament): Promise<StatementQuiz> {
+    return httpClient
+      .get(`/tournaments/${tournament.id}/start`)
+      .then(response => {
+        return new StatementQuiz(response.data);
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  // ***********************************************
+  // Student Question
+  // ***********************************************
+
+  static async getStudentQuestions(): Promise<StudentQuestion[]> {
+    return httpClient
+      .get('/studentQuestions/ownQuestions')
+      .then(response => {
+        return response.data.map((studentQuestion: any) => {
+          return new StudentQuestion(studentQuestion);
+        });
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static async createStudentQuestion(
+    question: StudentQuestion
+  ): Promise<StudentQuestion> {
+    return httpClient
+      .post(
+        `/courses/${Store.getters.getCurrentCourse.courseId}/studentQuestions/`,
+        question
+      )
+      .then(response => {
+        return new StudentQuestion(response.data);
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static async updateStudentQuestionTopics(
+    questionId: number,
+    topics: string[]
+  ) {
+    return httpClient.put(`/studentQuestions/${questionId}/topics`, topics);
+  }
+
+  static async updateStudentQuestionImage(
+    file: File,
+    questionId: number
+  ): Promise<string> {
+    let formData = new FormData();
+    formData.append('file', file);
+    return httpClient
+      .put(`/studentQuestions/${questionId}/image`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+      .then(response => {
+        return response.data as string;
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static async getCourseStudentQuestions() {
+    return httpClient
+      .get(
+        `/courses/${Store.getters.getCurrentCourse.courseId}/studentQuestions/`
+      )
+      .then(response => {
+        return response.data.map((studentQuestion: any) => {
+          return new StudentQuestion(studentQuestion);
+        });
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static async evaluateStudentQuestion(
+    question: StudentQuestion
+  ): Promise<StudentQuestion> {
+    return httpClient
+      .put(`/studentQuestions/${question.id}/evaluate`, question)
+      .then(response => {
+        return new StudentQuestion(response.data);
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static async deleteStudentQuestion(questionId: number) {
+    return httpClient
+      .delete(`/studentQuestions/${questionId}`)
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static async makeStudentQuestionAvailable(
+    questionId: number
+  ): Promise<StudentQuestion> {
+    return httpClient
+      .put(`/studentQuestions/${questionId}/available`)
+      .then(response => {
+        return new StudentQuestion(response.data);
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static async updateStudentQuestion(
+    question: StudentQuestion
+  ): Promise<StudentQuestion> {
+    return httpClient
+      .put(`/studentQuestions/${question.id}`, question)
+      .then(response => {
+        return new StudentQuestion(response.data);
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static async getSQDashboard(): Promise<SQDashboard> {
+    return httpClient
+      .get('/dashboards/myself/studentQuestions')
+      .then(response => {
+        return new SQDashboard(response.data);
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
+  }
+
+  static async changeSQDashboardPrivacy(
+    dashboard: SQDashboard
+  ): Promise<string> {
+    return httpClient
+      .put('/dashboards/myself/studentQuestions/privacy', dashboard)
+      .then(response => {
+        return response.data as string;
+      })
+      .catch(async error => {
+        throw Error(await this.errorMessage(error));
+      });
   }
 }

@@ -1,17 +1,21 @@
 package pt.ulisboa.tecnico.socialsoftware.tutor.answer.domain;
 
-import pt.ulisboa.tecnico.socialsoftware.tutor.course.CourseExecution;
+import pt.ulisboa.tecnico.socialsoftware.tutor.config.DateHandler;
+import pt.ulisboa.tecnico.socialsoftware.tutor.impexp.domain.DomainEntity;
+import pt.ulisboa.tecnico.socialsoftware.tutor.impexp.domain.Visitor;
 import pt.ulisboa.tecnico.socialsoftware.tutor.quiz.domain.Quiz;
 import pt.ulisboa.tecnico.socialsoftware.tutor.quiz.domain.QuizQuestion;
 import pt.ulisboa.tecnico.socialsoftware.tutor.user.User;
 
 import javax.persistence.*;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 @Entity
 @Table(name = "quiz_answers")
-public class QuizAnswer {
+public class QuizAnswer implements DomainEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
@@ -27,29 +31,25 @@ public class QuizAnswer {
     @Column(columnDefinition = "boolean default false")
     private boolean usedInStatistics;
 
-    @ManyToOne(fetch=FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
 
-    @ManyToOne(fetch=FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "quiz_id")
     private Quiz quiz;
 
-    @OneToMany(cascade = CascadeType.ALL, mappedBy = "quizAnswer", fetch=FetchType.LAZY, orphanRemoval=true)
+    @OneToMany(cascade = CascadeType.ALL, mappedBy = "quizAnswer", fetch = FetchType.LAZY, orphanRemoval = true)
     private List<QuestionAnswer> questionAnswers = new ArrayList<>();
 
     public QuizAnswer() {
     }
 
     public QuizAnswer(User user, Quiz quiz) {
-        this.completed = false;
-        this.usedInStatistics = false;
-        this.user = user;
-        user.addQuizAnswer(this);
-        this.quiz = quiz;
-        quiz.addQuizAnswer(this);
-
-        this.creationDate = LocalDateTime.now();
+        setCompleted(false);
+        setUsedInStatistics(false);
+        setUser(user);
+        setQuiz(quiz);
 
         List<QuizQuestion> quizQuestions = new ArrayList<>(quiz.getQuizQuestions());
         if (quiz.getScramble()) {
@@ -61,12 +61,13 @@ public class QuizAnswer {
         }
     }
 
-    public Integer getId() {
-        return id;
+    @Override
+    public void accept(Visitor visitor) {
+        visitor.visitQuizAnswer(this);
     }
 
-    public void setId(Integer id) {
-        this.id = id;
+    public Integer getId() {
+        return id;
     }
 
     public LocalDateTime getCreationDate() {
@@ -107,6 +108,7 @@ public class QuizAnswer {
 
     public void setUser(User user) {
         this.user = user;
+        user.addQuizAnswer(this);
     }
 
     public Quiz getQuiz() {
@@ -115,6 +117,7 @@ public class QuizAnswer {
 
     public void setQuiz(Quiz quiz) {
         this.quiz = quiz;
+        quiz.addQuizAnswer(this);
     }
 
     public void setQuestionAnswers(List<QuestionAnswer> questionAnswers) {
@@ -135,26 +138,22 @@ public class QuizAnswer {
         questionAnswers.add(questionAnswer);
     }
 
-
-
-    public void remove() {
-        user.getQuizAnswers().remove(this);
-        user = null;
-
-        quiz.getQuizAnswers().remove(this);
-        quiz = null;
-
-        for (QuestionAnswer questionAnswer: getQuestionAnswers()) {
-            questionAnswer.remove();
-        }
-
-        questionAnswers.clear();
+    @Override
+    public String toString() {
+        return "QuizAnswer{" +
+                "id=" + id +
+                ", creationDate=" + creationDate +
+                ", answerDate=" + answerDate +
+                ", completed=" + completed +
+                ", usedInStatistics=" + usedInStatistics +
+                '}';
     }
 
-    public boolean canResultsBePublic(CourseExecution courseExecution) {
+    public boolean canResultsBePublic(Integer courseExecutionId) {
         return isCompleted() &&
-                getQuiz().getCourseExecution() == courseExecution &&
-                !(getQuiz().getType().equals(Quiz.QuizType.IN_CLASS) && getQuiz().getConclusionDate().isAfter(LocalDateTime.now()));
+                getQuiz().getCourseExecution().getId().equals(courseExecutionId) &&
+                (!getQuiz().getType().equals(Quiz.QuizType.IN_CLASS) || getQuiz().getResultsDate().isBefore(DateHandler.now())
+                );
     }
 
     public void calculateStatistics() {
@@ -166,7 +165,6 @@ public class QuizAnswer {
                 if (questionAnswer.getOption() != null && questionAnswer.getOption().getCorrect()) {
                     user.increaseNumberOfCorrectAnswers(getQuiz().getType());
                 }
-
             });
 
             getQuestionAnswers().forEach(questionAnswer ->
@@ -174,5 +172,15 @@ public class QuizAnswer {
 
             this.usedInStatistics = true;
         }
+    }
+
+    public void remove() {
+        user.getQuizAnswers().remove(this);
+        user = null;
+
+        quiz.getQuizAnswers().remove(this);
+        quiz = null;
+
+        questionAnswers.clear();
     }
 }

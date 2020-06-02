@@ -6,6 +6,7 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import pt.ulisboa.tecnico.socialsoftware.tutor.config.Demo;
 import pt.ulisboa.tecnico.socialsoftware.tutor.course.Course;
 import pt.ulisboa.tecnico.socialsoftware.tutor.course.CourseDto;
 import pt.ulisboa.tecnico.socialsoftware.tutor.course.CourseRepository;
@@ -16,8 +17,6 @@ import pt.ulisboa.tecnico.socialsoftware.tutor.question.domain.Topic;
 import pt.ulisboa.tecnico.socialsoftware.tutor.question.dto.TopicDto;
 import pt.ulisboa.tecnico.socialsoftware.tutor.question.repository.TopicRepository;
 
-import javax.persistence.EntityManager;
-import javax.persistence.PersistenceContext;
 import java.sql.SQLException;
 import java.util.Comparator;
 import java.util.List;
@@ -35,9 +34,6 @@ public class TopicService {
 
     @Autowired
     private TopicRepository topicRepository;
-
-    @PersistenceContext
-    EntityManager entityManager;
 
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public CourseDto findTopicCourse(int topicId) {
@@ -70,7 +66,7 @@ public class TopicService {
         }
 
         Topic topic = new Topic(course, topicDto);
-        this.entityManager.persist(topic);
+        topicRepository.save(topic);
         return new TopicDto(topic);
     }
 
@@ -96,9 +92,8 @@ public class TopicService {
                 .orElseThrow(() -> new TutorException(TOPIC_NOT_FOUND, topicId));
 
         topic.remove();
-        entityManager.remove(topic);
+        topicRepository.delete(topic);
     }
-
 
     @Retryable(
       value = { SQLException.class },
@@ -110,7 +105,6 @@ public class TopicService {
         return xmlExport.export(topicRepository.findAll());
     }
 
-
     @Retryable(
       value = { SQLException.class },
       backoff = @Backoff(delay = 5000))
@@ -121,5 +115,14 @@ public class TopicService {
         xmlImporter.importTopics(topicsXML, this, questionService, courseRepository);
     }
 
+    @Retryable(
+            value = { SQLException.class },
+            backoff = @Backoff(delay = 5000))
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
+    public void resetDemoTopics() {
+        this.topicRepository.findTopics(Demo.COURSE_ID).stream().filter(topic -> topic.getId() > 125).forEach(topic ->
+                this.topicRepository.delete(topic)
+        );
+    }
 }
 
